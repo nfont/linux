@@ -997,6 +997,13 @@ struct pseries_errorlog *get_pseries_errorlog(struct rtas_error_log *log,
 	uint8_t log_format = rtas_ext_event_log_format(ext_log);
 	uint32_t company_id = rtas_ext_event_company_id(ext_log);
 
+	printk(KERN_EMERG "Validation: %x : %lx\n%x : %x\n%x : %x\n",
+		log->extended_log_length, sizeof(struct rtas_ext_event_log_v6),
+		rtas_ext_event_log_format(ext_log),
+		RTAS_V6EXT_LOG_FORMAT_EVENT_LOG,
+		rtas_ext_event_company_id(ext_log),
+		RTAS_V6EXT_COMPANY_ID_IBM);
+		
 	/* Check that we understand the format */
 	if (ext_log_length < sizeof(struct rtas_ext_event_log_v6) ||
 	    log_format != RTAS_V6EXT_LOG_FORMAT_EVENT_LOG ||

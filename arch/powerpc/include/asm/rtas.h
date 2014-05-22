@@ -254,6 +254,31 @@ inline uint32_t rtas_ext_event_company_id(struct rtas_ext_event_log_v6 *ext_log)
 	return be32_to_cpu(ext_log->company_id);
 }
 
+/* RTAS pseries hotplug elog section */ 
+struct pseries_hp_elog {
+	uint8_t		resource;
+	uint8_t		action:8;
+        uint8_t		id_type:8;
+        uint8_t		reserved;
+        union {
+		__be32	drc_index;
+		__be32	drc_count;
+		char	drc_name[1];
+        }_drc_u;
+};
+
+#define HP_ELOG_RESOURCE_CPU	1
+#define HP_ELOG_RESOURCE_MEM	2
+#define HP_ELOG_RESOURCE_SLOT	3
+#define HP_ELOG_RESOURCE_PHB	4
+
+#define HP_ELOG_ACTION_ADD	1
+#define HP_ELOG_ACTION_REMOVE	2
+
+#define HP_ELOG_ID_DRC_NAME	1
+#define HP_ELOG_ID_DRC_INDEX	2
+#define HP_ELOG_ID_DRC_COUNT	3
+
 /* pSeries event log format */
 
 /* Two bytes ASCII section IDs */
@@ -273,6 +298,7 @@ inline uint32_t rtas_ext_event_company_id(struct rtas_ext_event_log_v6 *ext_log)
 #define PSERIES_ELOG_SECT_ID_MANUFACT_INFO	(('M' << 8) | 'I')
 #define PSERIES_ELOG_SECT_ID_CALL_HOME		(('C' << 8) | 'H')
 #define PSERIES_ELOG_SECT_ID_USER_DEF		(('U' << 8) | 'D')
+#define PSERIES_ELOG_SECT_ID_HP			(('H' << 8) | 'P')
 
 /* Vendor specific Platform Event Log Format, Version 6, section header */
 struct pseries_errorlog {

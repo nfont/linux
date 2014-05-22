@@ -370,6 +370,12 @@ static int do_update_property(char *buf, size_t bufsize)
 	if (!strlen(name))
 		return -ENODEV;
 
+	/* updating the ibm,dynamic-memory property is no longer
+	 * supported through this interface.
+	 */
+	if (!strcmp(name, "ibm,dynamic-memory"))
+		return -EINVAL;
+
 	newprop = new_property(name, length, value, NULL);
 	if (!newprop)
 		return -ENOMEM;

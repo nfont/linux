@@ -16,9 +16,13 @@
 #include <linux/cpu.h>
 #include <linux/slab.h>
 #include <linux/of.h>
+#include <linux/proc_fs.h>
+#include <linux/memory.h>
+#include <linux/memblock.h>
+#include <linux/mutex.h>
 #include "offline_states.h"
+#include "pseries.h"
 
-#include <asm/prom.h>
 #include <asm/machdep.h>
 #include <asm/uaccess.h>
 #include <asm/rtas.h>
@@ -529,13 +533,68 @@ static ssize_t dlpar_cpu_release(const char *buf, size_t count)
 	return count;
 }
 
+#endif /* CONFIG_ARCH_CPU_PROBE_RELEASE */
+
+static int handle_dlpar_errorlog(struct rtas_error_log *error_log)
+{
+	struct pseries_errorlog *pseries_log;
+	struct pseries_hp_elog *hp_elog;
+	int rc = -EINVAL;
+
+	pseries_log = get_pseries_errorlog(error_log, PSERIES_ELOG_SECT_ID_HP);
+	if (!pseries_log)
+		return rc; 
+
+	hp_elog = (struct pseries_hp_elog *)pseries_log->data;
+	switch (hp_elog->resource) {
+	case HP_ELOG_RESOURCE_MEM:
+		rc = dlpar_memory(hp_elog);
+		break;
+	}
+
+	return rc;
+}
+
+static ssize_t dlpar_write(struct file *file, const char __user *buf,
+			   size_t count, loff_t *offset)
+{
+	char *event_buf;
+	int rc;
+
+	event_buf = kmalloc(count + 1, GFP_KERNEL);
+	if (!event_buf)
+		return -ENOMEM;
+
+	rc = copy_from_user(event_buf, buf, count);
+	if (rc) {
+		kfree(event_buf);
+		return rc;
+	}
+
+	rc = handle_dlpar_errorlog((struct rtas_error_log *)event_buf);
+	kfree(event_buf);
+	return rc;
+}
+
+static const struct file_operations dlpar_fops = {
+	.write = dlpar_write,
+	.llseek = noop_llseek,
+};
+
 static int __init pseries_dlpar_init(void)
 {
+	struct proc_dir_entry *proc_ent;
+
+	proc_ent = proc_create("powerpc/dlpar", S_IWUSR, NULL, &dlpar_fops);
+	if (proc_ent)
+		proc_set_size(proc_ent, 0);
+
+#ifdef CONFIG_ARCH_CPU_PROBE_RELEASE
 	ppc_md.cpu_probe = dlpar_cpu_probe;
 	ppc_md.cpu_release = dlpar_cpu_release;
+#endif /* CONFIG_ARCH_CPU_PROBE_RELEASE */
+
 
 	return 0;
 }
 machine_device_initcall(pseries, pseries_dlpar_init);
-
-#endif /* CONFIG_ARCH_CPU_PROBE_RELEASE */
