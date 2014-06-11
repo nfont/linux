@@ -275,6 +275,7 @@ int dlpar_attach_node(struct device_node *dn)
 	if (!dn->parent)
 		return -ENOMEM;
 
+	of_node_init(dn);
 	rc = of_attach_node(dn);
 	if (rc) {
 		printk(KERN_ERR "Failed to add device node %s\n",
@@ -373,6 +374,9 @@ static int handle_dlpar_errorlog(struct rtas_error_log *error_log)
 	switch (hp_elog->resource) {
 	case HP_ELOG_RESOURCE_MEM:
 		rc = dlpar_memory(hp_elog);
+		break;
+	case HP_ELOG_RESOURCE_CPU:
+		rc = dlpar_cpus(hp_elog);
 		break;
 	}
 

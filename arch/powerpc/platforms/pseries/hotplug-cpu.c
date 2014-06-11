@@ -24,6 +24,7 @@
 #include <linux/sched.h>	/* for idle_task_exit */
 #include <linux/cpu.h>
 #include <linux/of.h>
+#include <linux/slab.h>
 #include <asm/prom.h>
 #include <asm/rtas.h>
 #include <asm/firmware.h>
@@ -385,6 +386,169 @@ static int dlpar_remove_one_cpu(struct device_node *dn, u32 drc_index)
 	}
 
 	return 0;
+}
+
+struct cpu_drc_info {
+	u32	drc_index;
+	int	present;
+};
+
+static struct cpu_drc_info *get_cpu_drc_info(int *drc_count)
+{
+	struct device_node *dn, *child = NULL;
+	struct cpu_drc_info *drcs;
+	const u32 *indexes;
+	int i, count;
+
+	dn = of_find_node_by_path("/cpus");
+	if (!dn)
+		return NULL;
+
+	indexes = of_get_property(dn, "ibm,drc-indexes", NULL);
+	if (!indexes) {
+		of_node_put(dn);
+		return NULL;
+	}
+
+	count = *indexes++;
+	drcs = kzalloc(count * sizeof(*drcs), GFP_KERNEL);
+	if (!drcs) {
+		of_node_put(dn);
+		return NULL;
+	}
+
+	for (i = 0; i < count; i++)
+		drcs[i].drc_index = indexes[i];
+
+	for_each_child_of_node(dn, child) {
+		const u32 *drc_index;
+
+		drc_index = of_get_property(child, "ibm,my-drc-index", NULL);
+		if (!drc_index)
+			continue;
+
+		for (i = 0; i < count; i++) {
+			if (drcs[i].drc_index == *drc_index)
+				drcs[i].present = 1;
+				break;
+		}
+	}
+
+	of_node_put(dn);
+	*drc_count = count;
+	return drcs;
+}
+
+static struct device_node *cpu_drc_index_to_device(u32 drc_index)
+{
+	struct device_node *parent, *child;
+	const u32 *my_drc_index;
+
+	parent = of_find_node_by_path("/cpus");
+	if (!parent)
+		return NULL;
+
+	for_each_child_of_node(parent, child) {
+		my_drc_index = of_get_property(child, "ibm,my-drc-index", NULL);
+		if (!my_drc_index)
+			continue;
+
+		if (*my_drc_index == drc_index)
+			break;
+	}
+
+	of_node_put(parent);
+	return child;
+}
+
+static int dlpar_remove_cpus(struct pseries_hp_elog *hp_elog,
+			    struct cpu_drc_info *cpu_drcs, int num_drcs)
+{
+	struct device_node *dn;
+	int cpus_to_remove, cpus_removed = 0;
+	int rc, i;
+
+	if (hp_elog->id_type == HP_ELOG_ID_DRC_COUNT)
+		cpus_to_remove = hp_elog->_drc_u.drc_count;
+	else
+		cpus_to_remove = 1;
+
+	for (i = 0; i < num_drcs; i++) {
+		if (cpus_to_remove == cpus_removed)
+			break;
+
+		if (!cpu_drcs[i].present)
+			continue;
+
+		if (hp_elog->id_type == HP_ELOG_ID_DRC_INDEX
+		    && hp_elog->_drc_u.drc_index != cpu_drcs[i].drc_index)
+			continue;
+
+		dn = cpu_drc_index_to_device(cpu_drcs[i].drc_index);
+		if (!dn)
+			continue;
+
+		rc = dlpar_remove_one_cpu(dn, cpu_drcs[i].drc_index);
+		of_node_put(dn);
+		
+		if (!rc)
+			cpus_removed++;
+	}
+
+	return (cpus_to_remove == cpus_removed) ? 0: -1;
+}
+
+static int dlpar_add_cpus(struct pseries_hp_elog *hp_elog,
+			  struct cpu_drc_info *cpu_drcs, int num_drcs)
+{
+	int cpus_to_add, cpus_added = 0;
+	int rc, i;
+
+	if (hp_elog->id_type == HP_ELOG_ID_DRC_COUNT)
+		cpus_to_add = hp_elog->_drc_u.drc_count;
+	else
+		cpus_to_add = 1;
+
+	for (i = 0; i < num_drcs; i++) {
+		if (cpus_to_add == cpus_added)
+			break;
+
+		if (cpu_drcs[i].present)
+			continue;
+
+		if (hp_elog->id_type == HP_ELOG_ID_DRC_INDEX
+		    && hp_elog->_drc_u.drc_index != cpu_drcs[i].drc_index)
+			continue;
+		
+		rc = dlpar_add_one_cpu(cpu_drcs[i].drc_index);
+		if (!rc)
+			cpus_added++;
+	}
+
+	return (cpus_to_add == cpus_added) ? 0: -1;
+}
+
+int dlpar_cpus(struct pseries_hp_elog *hp_elog)
+{
+	struct cpu_drc_info *cpu_drcs;
+	int num_drcs;
+	int rc = 0;
+
+	cpu_drcs = get_cpu_drc_info(&num_drcs);
+	if (!cpu_drcs)
+		return -1;
+
+	switch (hp_elog->action) {
+	case HP_ELOG_ACTION_ADD:
+		rc = dlpar_add_cpus(hp_elog, cpu_drcs, num_drcs);
+		break;
+	case HP_ELOG_ACTION_REMOVE:
+		rc = dlpar_remove_cpus(hp_elog, cpu_drcs, num_drcs);
+		break;
+	}
+
+	kfree(cpu_drcs);
+	return rc;
 }
 
 #ifdef CONFIG_ARCH_CPU_PROBE_RELEASE
