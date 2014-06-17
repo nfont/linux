@@ -360,7 +360,7 @@ int dlpar_release_drc(u32 drc_index)
 	return 0;
 }
 
-static int handle_dlpar_errorlog(struct rtas_error_log *error_log)
+int handle_dlpar_errorlog(struct rtas_error_log *error_log)
 {
 	struct pseries_errorlog *pseries_log;
 	struct pseries_hp_elog *hp_elog;

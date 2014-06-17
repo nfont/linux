@@ -183,6 +183,7 @@ void rtas_parse_epow_errlog(struct rtas_error_log *log)
 /* Handle environmental and power warning (EPOW) interrupts. */
 static irqreturn_t ras_epow_interrupt(int irq, void *dev_id)
 {
+	struct rtas_error_log *elog;
 	int status;
 	int state;
 	int critical;
@@ -205,7 +206,16 @@ static irqreturn_t ras_epow_interrupt(int irq, void *dev_id)
 
 	log_error(ras_log_buf, ERR_TYPE_RTAS_LOG, 0);
 
-	rtas_parse_epow_errlog((struct rtas_error_log *)ras_log_buf);
+	elog = (struct rtas_error_log *)ras_log_buf;
+
+	switch(rtas_error_type(elog)) {
+	case RTAS_TYPE_EPOW:
+		rtas_parse_epow_errlog(elog);
+		break;
+	case RTAS_TYPE_HOTPLUG:
+		handle_dlpar_errorlog(elog);
+		break;
+	}
 
 	spin_unlock(&ras_log_buf_lock);
 	return IRQ_HANDLED;

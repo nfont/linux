@@ -64,6 +64,7 @@ extern int dlpar_acquire_drc(u32);
 extern int dlpar_release_drc(u32);
 extern int dlpar_memory(struct pseries_hp_elog *);
 extern int dlpar_cpus(struct pseries_hp_elog *);
+extern int handle_dlpar_errorlog(struct rtas_error_log *);
 
 /* PCI root bridge prepare function override for pseries */
 struct pci_host_bridge;
