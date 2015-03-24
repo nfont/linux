@@ -224,6 +224,8 @@ static irqreturn_t ras_epow_interrupt(int irq, void *dev_id)
 static irqreturn_t ras_error_interrupt(int irq, void *dev_id)
 {
 	struct rtas_error_log *rtas_elog;
+	struct pseries_errorlog *pseries_elog;
+	struct pseries_hp_errorlog *hp_elog = NULL;
 	int status;
 	int fatal;
 
@@ -244,8 +246,14 @@ static irqreturn_t ras_error_interrupt(int irq, void *dev_id)
 	else
 		fatal = 0;
 
-	/* format and print the extended information */
-	log_error(ras_log_buf, ERR_TYPE_RTAS_LOG, fatal);
+	pseries_elog = get_pseries_errorlog(rtas_elog,
+					    PSERIES_ELOG_SECT_ID_HOTPLUG);
+	if (pseries_elog)
+		hp_elog = (struct pseries_hp_errorlog *)pseries_elog->data;
+
+	/* format and print the extended information for non-hotplug logs */
+	if (!hp_elog)
+		log_error(ras_log_buf, ERR_TYPE_RTAS_LOG, fatal);
 
 	if (fatal) {
 		pr_emerg("Fatal hardware error reported by firmware");
@@ -253,6 +261,18 @@ static irqreturn_t ras_error_interrupt(int irq, void *dev_id)
 		pr_emerg("Immediate power off");
 		emergency_sync();
 		kernel_power_off();
+	}
+
+	if (hp_elog) {
+		int rc;
+
+		rc = handle_dlpar_errorlog(hp_elog);
+		if (rc == -EINVAL) {
+			/* No kernel handler for this hotplug event, pass
+			 * up to userspace for handling.
+			 */
+			log_error(ras_log_buf, ERR_TYPE_RTAS_LOG, fatal);
+		}
 	} else {
 		pr_err("Recoverable hardware error reported by firmware");
 	}

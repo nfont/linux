@@ -539,7 +539,7 @@ static ssize_t dlpar_cpu_release(const char *buf, size_t count)
 
 #endif /* CONFIG_ARCH_CPU_PROBE_RELEASE */
 
-static int handle_dlpar_errorlog(struct pseries_hp_errorlog *hp_elog)
+int handle_dlpar_errorlog(struct pseries_hp_errorlog *hp_elog)
 {
 	int rc;
 

@@ -63,6 +63,7 @@ extern int dlpar_attach_node(struct device_node *);
 extern int dlpar_detach_node(struct device_node *);
 int dlpar_acquire_drc(u32 drc_index);
 int dlpar_release_drc(u32 drc_index);
+int handle_dlpar_errorlog(struct pseries_hp_errorlog *hp_elog);
 
 #ifdef CONFIG_MEMORY_HOTPLUG
 int dlpar_memory(struct pseries_hp_errorlog *hp_elog);
